@@ -10,8 +10,8 @@ import time
 import re
 import os
 from datetime import datetime, timedelta
+import pytz
 from dotenv import load_dotenv
-
 os.environ['TZ'] = 'America/Montreal'
 time.tzset()
 
