@@ -235,6 +235,7 @@ def main():
     
     if times:
         display_prayer_times(times)
+        schedule.clear()
         schedule_notifications(times)
         
         # Envoyer confirmation Telegram
