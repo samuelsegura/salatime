@@ -12,6 +12,9 @@ import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+os.environ['TZ'] = 'America/Montreal'
+time.tzset()
+
 # Charger les variables d'environnement
 load_dotenv()
 
