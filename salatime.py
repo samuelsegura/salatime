@@ -258,9 +258,6 @@ if __name__ == '__main__':
     # Exécuter immédiatement au démarrage
     main()
     
-    # Programmer la mise à jour quotidienne à 5h du matin
-    schedule.every().day.at("05:00").do(main)
-    
     print('🔄 En attente du prochain événement...\n')
     
     # Boucle infinie pour exécuter les tâches programmées
