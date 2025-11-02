@@ -19,17 +19,35 @@ time.tzset()
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+ADMIN_CHAT_ID = os.getenv('ADMIN_CHAT_ID')
+MOSQUEES = {
+    'Masjid Annour': {
+        'url': 'https://mosqueprayertimes.com/cciq2',
+        'canal_id': os.getenv('CANAL_CCIQ2')
+    },
+    'CCIQ': {
+        'url': 'https://mosqueprayertimes.com/cciq',
+        'canal_id': os.getenv('CANAL_CCIQ')
+    },
+    'Masjid Charlesbourg': {
+        'url': 'https://mosqueprayertimes.com/cciq4',
+        'canal_id': os.getenv('CANAL_CCIQ4')
+    },
+    'Masjid Al Athar': {
+        'url': 'https://mosqueprayertimes.com/masjidalathar',
+        'canal_id': os.getenv('CANAL_ALATHAR')
+    }
+}
 
 # ============================================
 # FONCTION 1 : Récupérer les horaires
 # ============================================
-def get_prayer_times():
+def get_prayer_times(url):
     """Scrape les horaires depuis mosqueprayertimes.com"""
     try:
         print('📡 Récupération des horaires depuis mosqueprayertimes.com...')
         
-        response = requests.get('https://mosqueprayertimes.com/cciq2', timeout=10)
+        response = requests.get(url, timeout=10)
         html = response.text
         
         # Extraire la variable MPT avec regex
@@ -112,14 +130,14 @@ def display_prayer_times(times):
 # ============================================
 # FONCTION 4 : Envoyer notification Telegram
 # ============================================
-def send_telegram_notification(prayer_name, prayer_time):
+def send_telegram_notification(prayer_name, prayer_time, canal_id):
     """Envoie une notification via Telegram"""
     try:
         message = f"🕌 Prière de {prayer_name}\n⏰ L'Iqama commence dans 10 minutes à {prayer_time}"
         
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
-            'chat_id': TELEGRAM_CHAT_ID,
+            'chat_id': canal_id,
             'text': message
         }
         
@@ -136,12 +154,13 @@ def send_telegram_notification(prayer_name, prayer_time):
 # ============================================
 # FONCTION 4B : Confirmation quotidienne
 # ============================================
-def send_confirmation_telegram(times):
+def send_confirmation_telegram(times, mosque_name):
     """Envoie une confirmation avec les horaires du jour"""
     try:
         today = datetime.now().strftime('%A %d %B %Y')
         
         message = f"""✅ Horaires récupérés - {today}
+        📍 {mosque_name}
 
 🌙 Fajr: {times['fajr']['iqama']}
 ☀️ Zuhr: {times['zuhr']['iqama']}
@@ -153,7 +172,7 @@ def send_confirmation_telegram(times):
         
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
-            'chat_id': TELEGRAM_CHAT_ID,
+            'chat_id': ADMIN_CHAT_ID,
             'text': message
         }
         
@@ -167,14 +186,13 @@ def send_confirmation_telegram(times):
     except Exception as e:
         print(f"❌ Erreur envoi confirmation: {e}")
 
-def send_error_telegram():
+def send_error_telegram(mosque_name):
     """Envoie une alerte en cas d'échec de récupération"""
     try:
-        message = "❌ ERREUR: Impossible de récupérer les horaires ce matin !\n\nVérifiez le système."
-        
+        message = f"❌ ERREUR: Impossible de récupérer les horaires pour {mosque_name} ce matin !\n\nVérifiez le système."        
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         data = {
-            'chat_id': TELEGRAM_CHAT_ID,
+            'chat_id': ADMIN_CHAT_ID,
             'text': message
         }
         
@@ -188,7 +206,7 @@ def send_error_telegram():
 # ============================================
 # FONCTION 5 : Programmer les notifications
 # ============================================
-def schedule_notifications(times):
+def schedule_notifications(times, mosque_name, canal_id):
     """Programme les notifications 10 minutes avant chaque Iqama"""
     
     prayers = [
@@ -199,7 +217,7 @@ def schedule_notifications(times):
         ('Isha', times['isha']['iqama'])
     ]
     
-    print('\n⏰ Programmation des notifications (10 min avant Iqama):')
+    print(f'\n⏰ Programmation des notifications pour {mosque_name}:')
     
     for prayer_name, iqama_time in prayers:
         if not iqama_time:
@@ -216,7 +234,7 @@ def schedule_notifications(times):
         if notification_time > datetime.now():
             # Programmer la notification
             schedule.every().day.at(notification_time.strftime('%H:%M')).do(
-                send_telegram_notification, prayer_name, iqama_time
+                send_telegram_notification, prayer_name, iqama_time, canal_id
             )
             
             print(f"   ✓ {prayer_name}: notification à {notification_time.strftime('%H:%M')} (Iqama à {iqama_time})")
@@ -229,27 +247,30 @@ def schedule_notifications(times):
 # FONCTION PRINCIPALE
 # ============================================
 def main():
-    """Fonction principale - récupère et programme les horaires"""
+    """Fonction principale - récupère et programme les horaires pour toutes les mosquées"""
     print('\n🕌 ════════════════════════════════════════════════')
-    print('   Système de notifications - CCIQ')
+    print('   Système de notifications - Multi-mosquées')
     print('════════════════════════════════════════════════ 🕌\n')
     
-    times = get_prayer_times()
+    schedule.clear()
     
-    if times:
-        display_prayer_times(times)
-        schedule.clear()
-        schedule_notifications(times)
+    # Boucler sur chaque mosquée
+    for mosque_name, config in MOSQUEES.items():
+        print(f'\n📍 Traitement de {mosque_name}...')
         
-        # Envoyer confirmation Telegram
-        send_confirmation_telegram(times)
+        times = get_prayer_times(config['url'])
         
-        print('✅ Système actif ! Les notifications seront envoyées 10 min avant chaque Iqama.')
-        print('⌨️  Appuyez sur Ctrl+C pour arrêter\n')
-    else:
-        # Envoyer alerte d'échec
-        send_error_telegram()
-        print('❌ Impossible de récupérer les horaires\n')
+        if times:
+            display_prayer_times(times)
+            schedule_notifications(times, mosque_name, config['canal_id'])
+            send_confirmation_telegram(times, mosque_name)
+            print(f'✅ {mosque_name} : Système actif !')
+        else:
+            send_error_telegram(mosque_name)
+            print(f'❌ {mosque_name} : Impossible de récupérer les horaires')
+    
+    print('\n✅ Toutes les mosquées traitées !')
+    print('⌨️  Appuyez sur Ctrl+C pour arrêter\n')
 
 # ============================================
 # LANCEMENT DU PROGRAMME
