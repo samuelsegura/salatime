@@ -41,45 +41,60 @@ MOSQUEES = {
 # ============================================
 # FONCTION 1 : Récupérer les horaires
 # ============================================
-def get_prayer_times(url):
-    """Scrape les horaires depuis mosqueprayertimes.com"""
-    try:
-        print('📡 Récupération des horaires depuis mosqueprayertimes.com...')
-        
-        response = requests.get(url, timeout=10)
-        html = response.text
-        
-        # Extraire la variable MPT avec regex
-        mpt_match = re.search(r'MPT=\{([^}]+)\}', html)
-        
-        if not mpt_match:
-            print('❌ Impossible de trouver les horaires dans la page')
-            return None
-        
-        # Parser les données MPT
-        mpt_data = {}
-        entries = re.findall(r'(\d{8}):"([^"]+)"', mpt_match.group(1))
-        
-        for date_key, times_str in entries:
-            mpt_data[date_key] = times_str
-        
-        # Obtenir les horaires d'aujourd'hui
-        today = datetime.now()
-        date_key = today.strftime('%Y%m%d')
-        
-        if date_key not in mpt_data:
-            print(f'❌ Pas de données pour aujourd\'hui: {date_key}')
-            return None
-        
-        # Décoder les horaires
-        times = decode_prayer_times(mpt_data[date_key])
-        
-        print('✅ Horaires récupérés avec succès !')
-        return times
-        
-    except Exception as e:
-        print(f'❌ Erreur lors de la récupération: {e}')
-        return None
+def get_prayer_times(url, max_retries=3):
+    """Scrape les horaires depuis mosqueprayertimes.com avec retry automatique"""
+    for attempt in range(max_retries):
+        try:
+            if attempt > 0:
+                print(f'📡 Récupération des horaires (tentative {attempt+1}/{max_retries})...')
+            else:
+                print('📡 Récupération des horaires depuis mosqueprayertimes.com...')
+            
+            response = requests.get(url, timeout=10)
+            html = response.text
+            
+            # Extraire la variable MPT avec regex
+            mpt_match = re.search(r'MPT=\{([^}]+)\}', html)
+            
+            if not mpt_match:
+                print('❌ Impossible de trouver les horaires dans la page')
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+                    continue
+                return None
+            
+            # Parser les données MPT
+            mpt_data = {}
+            entries = re.findall(r'(\d{8}):"([^"]+)"', mpt_match.group(1))
+            
+            for date_key, times_str in entries:
+                mpt_data[date_key] = times_str
+            
+            # Obtenir les horaires d'aujourd'hui
+            today = datetime.now()
+            date_key = today.strftime('%Y%m%d')
+            
+            if date_key not in mpt_data:
+                print(f'❌ Pas de données pour aujourd\'hui: {date_key}')
+                if attempt < max_retries - 1:
+                    time.sleep(5)
+                    continue
+                return None
+            
+            # Décoder les horaires
+            times = decode_prayer_times(mpt_data[date_key])
+            
+            print('✅ Horaires récupérés avec succès !')
+            return times
+            
+        except Exception as e:
+            print(f'❌ Erreur tentative {attempt+1}: {e}')
+            if attempt < max_retries - 1:
+                print(f'⏳ Nouvelle tentative dans 5 secondes...')
+                time.sleep(5)
+            else:
+                print(f'❌ Échec après {max_retries} tentatives')
+                return None
 
 # ============================================
 # FONCTION 2 : Décoder la chaîne d'horaires
